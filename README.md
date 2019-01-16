@@ -43,3 +43,17 @@ You can also use the CLI by executing the following command from your container:
 ```
 $ docker-run --rm fundocker/learninglocker:v2.6.2 node cli/dist/server
 ```
+
+### docker-compose example
+
+In the `example` directory you will find a docker-compose configuration. This configuration is here as an example to help you to integrate
+Learning Locker in your stack.
+
+You can run it without modification in this directory, you can test it by connecting to the interface with the url [http://localhost:8080](http://localhost:8080).
+You will also have to create a `site admin` by executing this command once your docker-compose is up and running:
+
+```
+$ docker-compose exec api node cli/dist/server createSiteAdmin [email] [organisation] [password]
+```
+
+You will probably want to integrate the Learning Locker API in your project, to do that you must copy the `docker-compose.yml` content in your `docker-compose.yml` project file and adapt it to match with your stack.
