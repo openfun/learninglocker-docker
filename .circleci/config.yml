@@ -1,0 +1,124 @@
+version: 2
+jobs:
+  build:
+    working_directory: ~/learninglocker
+    machine:
+      docker_layer_caching: true
+    steps:
+      - checkout
+      - run:
+          name: create cache directory
+          command: mkdir -p docker/images
+
+      - restore_cache:
+          keys:
+            - learninglocker-image-{{ .Revision }}
+            - learninglocker-image
+
+      - run:
+          name: Load images to docker engine
+          command: |
+            set -x
+            if [[ -e docker/images/learninglocker.tar ]]; then
+              docker load < docker/images/learninglocker.tar
+            fi
+
+      - run:
+          name: register build arg instruction to use it in build step if CIRCLE_TAG is not null
+          command: |
+            set -x
+            if [[ -n ${CIRCLE_TAG:+x} ]]; then
+              echo 'export ARG_VERSION="--build-arg LL_VERSION=${CIRCLE_TAG}"' >> $BASH_ENV
+            else
+              echo 'export ARG_VERSION=""' >> $BASH_ENV
+            fi
+            source $BASH_ENV
+
+      - run:
+          name: build learning locker image
+          command: |
+            docker build \
+              -t fundocker/learninglocker:${CIRCLE_SHA1} \
+              ${ARG_VERSION} \
+              .
+
+      - run:
+          name: List available images
+          command: docker images fundocker/learninglocker
+
+      - run:
+          name: Store docker image in cache
+          command: |
+            docker save \
+              -o docker/images/learninglocker.tar \
+              fundocker/learninglocker:${CIRCLE_SHA1}
+
+      - save_cache:
+          paths:
+            - ~/learninglocker/docker/images/
+          key: learninglocker-image-{{ .Revision }}
+
+  hub:
+    working_directory: ~/learninglocker
+    machine: true
+    steps:
+      - run:
+          name: create cache directory
+          command: mkdir -p docker/images
+
+      - restore_cache:
+          keys:
+            - learninglocker-image-{{ .Revision }}
+
+      - run:
+          name: Load images to docker engine
+          command: |
+            docker load < docker/images/learninglocker.tar
+
+      # Login to DockerHub to Publish new images
+      #
+      # Nota bene: you'll need to define the following secrets environment vars
+      # in CircleCI interface:
+      #
+      #   - DOCKER_USER
+      #   - DOCKER_PASS
+      - run:
+          name: Login to DockerHub
+          command: echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+      - run:
+          name: List available images
+          command: docker images fundocker/learninglocker
+
+      - run:
+          name: tag images
+          command: |
+            docker tag fundocker/learninglocker:${CIRCLE_SHA1} fundocker/learninglocker:latest
+            docker tag fundocker/learninglocker:${CIRCLE_SHA1} fundocker/learninglocker:${CIRCLE_TAG}
+            docker images fundocker/learninglocker
+
+      - run:
+          name: Publish images
+          command: |
+            docker push fundocker/learninglocker:latest
+            docker push fundocker/learninglocker:${CIRCLE_TAG}
+
+workflows:
+  version: 2
+  learninglocker:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /^v.*$/
+            branches:
+              only: /.*/
+
+      - hub:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^v.*$/
+            branches:
+              ignore: /.*/
