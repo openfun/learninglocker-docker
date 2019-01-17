@@ -9,7 +9,7 @@ FROM node:8-jessie-slim
 #   -t learninglocker:v2.6.2 \
 #   .
 #
-ARG LL_VERSION
+ARG LL_VERSION="v2.6.2"
 
 RUN mkdir /app \
     && chown node. /app
