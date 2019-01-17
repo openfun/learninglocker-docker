@@ -24,22 +24,11 @@ jobs:
             fi
 
       - run:
-          name: register build arg instruction to use it in build step if CIRCLE_TAG is not null
-          command: |
-            set -x
-            if [[ -n ${CIRCLE_TAG:+x} ]]; then
-              echo 'export ARG_VERSION="--build-arg LL_VERSION=${CIRCLE_TAG}"' >> $BASH_ENV
-            else
-              echo 'export ARG_VERSION=""' >> $BASH_ENV
-            fi
-            source $BASH_ENV
-
-      - run:
           name: build learning locker image
           command: |
             docker build \
               -t fundocker/learninglocker:${CIRCLE_SHA1} \
-              ${ARG_VERSION} \
+              --build-arg LL_VERSION=${CIRCLE_TAG:-v2.6.2} \
               .
 
       - run:
