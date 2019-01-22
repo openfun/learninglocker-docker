@@ -1,14 +1,14 @@
 version: 2
 jobs:
-  build:
+  build-learninglocker:
     working_directory: ~/learninglocker
     machine:
       docker_layer_caching: true
     steps:
       - checkout
       - run:
-          name: create cache directory
-          command: mkdir -p docker/images
+          name: Create cache directory
+          command: mkdir -p docker/images/learninglocker
 
       - restore_cache:
           keys:
@@ -19,16 +19,15 @@ jobs:
           name: Load images to docker engine
           command: |
             set -x
-            if [[ -e docker/images/learninglocker.tar ]]; then
-              docker load < docker/images/learninglocker.tar
+            if [[ -e docker/images/learninglocker/learninglocker.tar ]]; then
+              docker load < docker/images/learninglocker/learninglocker.tar
             fi
 
       - run:
-          name: build learning locker image
+          name: Build learning locker image
           command: |
             docker build \
               -t fundocker/learninglocker:${CIRCLE_SHA1} \
-              --build-arg LL_VERSION=${CIRCLE_TAG:-v2.6.2} \
               learninglocker/
 
       - run:
@@ -39,21 +38,69 @@ jobs:
           name: Store docker image in cache
           command: |
             docker save \
-              -o docker/images/learninglocker.tar \
+              -o docker/images/learninglocker/learninglocker.tar \
               fundocker/learninglocker:${CIRCLE_SHA1}
 
       - save_cache:
           paths:
-            - ~/learninglocker/docker/images/
+            - ~/learninglocker/docker/images/learninglocker
           key: learninglocker-image-{{ .Revision }}
 
-  hub:
+  build-xapi-service:
+    working_directory: ~/learninglocker
+    machine:
+      docker_layer_caching: true
+    steps:
+      - checkout
+      - run:
+          name: Create cache directory
+          command: mkdir -p docker/images/xapi-service
+
+      - restore_cache:
+          keys:
+            - xapi-service-image-{{ .Revision }}
+            - xapi-service-image
+
+      - run:
+          name: Load images to docker engine
+          command: |
+            set -x
+            if [[ -e docker/images/xapi-service/xapi-service.tar ]]; then
+              docker load < docker/images/xapi-service/xapi-service.tar
+            fi
+
+      - run:
+          name: Build xapi-service image
+          command: |
+            docker build \
+              -t fundocker/xapi-service:${CIRCLE_SHA1} \
+              xapi/
+
+      - run:
+          name: List available images
+          command: docker images fundocker/xapi-service
+
+      - run:
+          name: Store docker image in cache
+          command: |
+            docker save \
+              -o docker/images/xapi-service/xapi-service.tar \
+              fundocker/xapi-service:${CIRCLE_SHA1}
+
+      - save_cache:
+          paths:
+            - ~/learninglocker/docker/images/xapi-service
+          key: xapi-service-image-{{ .Revision }}
+
+  hub-learninglocker:
     working_directory: ~/learninglocker
     machine: true
     steps:
+      - checkout
       - run:
-          name: create cache directory
-          command: mkdir -p docker/images
+          name: Create cache directory
+          command: |
+            mkdir -p docker/images/learninglocker
 
       - restore_cache:
           keys:
@@ -62,7 +109,7 @@ jobs:
       - run:
           name: Load images to docker engine
           command: |
-            docker load < docker/images/learninglocker.tar
+            docker load < docker/images/learninglocker/learninglocker.tar
 
       # Login to DockerHub to Publish new images
       #
@@ -77,37 +124,103 @@ jobs:
 
       - run:
           name: List available images
-          command: docker images fundocker/learninglocker
+          command: |
+            docker images fundocker/learninglocker
 
       - run:
-          name: tag images
+          name: Tag images
           command: |
+            source ./.circleci/releases.sh
             docker tag fundocker/learninglocker:${CIRCLE_SHA1} fundocker/learninglocker:latest
-            docker tag fundocker/learninglocker:${CIRCLE_SHA1} fundocker/learninglocker:${CIRCLE_TAG}
+            docker tag fundocker/learninglocker:${CIRCLE_SHA1} fundocker/learninglocker:${LEARNINGLOCKER_VERSION}
             docker images fundocker/learninglocker
 
       - run:
           name: Publish images
           command: |
+            source ./.circleci/releases.sh
             docker push fundocker/learninglocker:latest
-            docker push fundocker/learninglocker:${CIRCLE_TAG}
+            docker push fundocker/learninglocker:${LEARNINGLOCKER_VERSION}
+
+  hub-xapi-service:
+    working_directory: ~/learninglocker
+    machine: true
+    steps:
+      - checkout
+      - run:
+          name: Create cache directory
+          command: |
+            mkdir -p docker/images/xapi-service
+
+      - restore_cache:
+          keys:
+            - xapi-service-image-{{ .Revision }}
+
+      - run:
+          name: Load images to docker engine
+          command: |
+            docker load < docker/images/xapi-service/xapi-service.tar
+
+      # Login to DockerHub to Publish new images
+      #
+      # Nota bene: you'll need to define the following secrets environment vars
+      # in CircleCI interface:
+      #
+      #   - DOCKER_USER
+      #   - DOCKER_PASS
+      - run:
+          name: Login to DockerHub
+          command: echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+      - run:
+          name: List available images
+          command: |
+            docker images fundocker/xapi-service
+
+      - run:
+          name: Tag images
+          command: |
+            source ./.circleci/releases.sh
+            docker tag fundocker/xapi-service:${CIRCLE_SHA1} fundocker/xapi-service:latest
+            docker tag fundocker/xapi-service:${CIRCLE_SHA1} fundocker/xapi-service:${XAPI_VERSION}
+            docker images fundocker/xapi-service
+
+      - run:
+          name: Publish images
+          command: |
+            source ./.circleci/releases.sh
+            docker push fundocker/xapi-service:latest
+            docker push fundocker/xapi-service:${XAPI_VERSION}
 
 workflows:
   version: 2
   learninglocker:
     jobs:
-      - build:
+      - build-learninglocker:
           filters:
             tags:
-              only: /^v.*$/
+              only: /^learninglocker-v.*$/
             branches:
               only: /.*/
-
-      - hub:
-          requires:
-            - build
+      - build-xapi-service:
           filters:
             tags:
-              only: /^v.*$/
+              only: /^xapi-service-v.*$/
+            branches:
+              only: /.*/
+      - hub-learninglocker:
+          requires:
+            - build-learninglocker
+          filters:
+            tags:
+              only: /^learninglocker-v.*$/
+            branches:
+              ignore: /.*/
+      - hub-xapi-service:
+          requires:
+            - build-xapi-service
+          filters:
+            tags:
+              only: /^xapi-service-v.*$/
             branches:
               ignore: /.*/
