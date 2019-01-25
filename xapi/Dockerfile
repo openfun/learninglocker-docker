@@ -1,7 +1,7 @@
 # xapi-service Dockerfile
 FROM node:8-jessie-slim as Builder
 
-ARG VERSION="v2.2.15"
+ARG VERSION
 
 RUN mkdir /app
 
