@@ -12,7 +12,7 @@ We follow learning locker's versions, so images built from this repository will 
 To build a learning locker image, you have to pick the right [tag](https://github.com/LearningLocker/learninglocker/tags) to use and then build it using the following docker command (here with the `v2.6.2` tag):
 
 ```bash
-$ docker build -t fundocker/learninglocker:v2.6.2 --build-arg LL_VERSION="v2.6.2" learning/
+$ docker build -t fundocker/learninglocker:v2.6.2 --build-arg LL_VERSION="v2.6.2" learninglocker/
 ```
 
 ## Building xapi-service image
@@ -46,25 +46,25 @@ There is no entrypoint nor command configured in this image. You will have to de
 Running the UI application:
 
 ```
-$ docker-run --rm fundocker/learninglocker:v2.6.2 node ui/dist/server
+$ docker run --rm fundocker/learninglocker:v2.6.2 node ui/dist/server
 ```
 
 Running the API application:
 
 ```
-$ docker-run --rm fundocker/learninglocker:v2.6.2 node api/dist/server
+$ docker run --rm fundocker/learninglocker:v2.6.2 node api/dist/server
 ```
 
 Running the worker application:
 
 ```
-$ docker-run --rm fundocker/learninglocker:v2.6.2 node worker/dist/server
+$ docker run --rm fundocker/learninglocker:v2.6.2 node worker/dist/server
 ```
 
 You can also use the CLI by executing the following command from your container:
 
 ```
-$ docker-run --rm fundocker/learninglocker:v2.6.2 node cli/dist/server
+$ docker run --rm fundocker/learninglocker:v2.6.2 node cli/dist/server
 ```
 
 ### Using the xapi-service image
