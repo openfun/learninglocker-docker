@@ -34,6 +34,8 @@ services:
       - env.d/learninglocker
     expose:
       - "8080"
+    volumes:
+      - "./storage:/app/storage"
     command: "node api/dist/server"
     depends_on:
       - mongodb
@@ -44,6 +46,8 @@ services:
     image: fundocker/learninglocker:v2.6.2
     env_file:
       - env.d/learninglocker
+    volumes:
+      - "./storage:/app/storage"
     expose:
       - "3000"
     command: "node ui/dist/server"
@@ -56,6 +60,8 @@ services:
     image: fundocker/learninglocker:v2.6.2
     env_file:
       - env.d/learninglocker
+    volumes:
+      - "./storage:/app/storage"
     command: "node worker/dist/server"
     depends_on:
       - mongodb
