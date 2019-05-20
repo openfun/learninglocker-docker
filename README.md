@@ -52,6 +52,66 @@ publish:
 - `xapi-service-[RELEASE_TAG]` if you want to publish a new xapi-service image
   (_e.g._ `xapi-service-v2.2.15`).
 
+### Using the release script
+
+If you have more than one release to publish, we also provide the `bin/release`
+Bash script to automate the whole releasing process.
+
+#### Requirements
+
+The `bin/release` script requires to install the two following dependencies
+on your system:
+
+- [curl](https://curl.haxx.se/)
+- [jq](https://stedolan.github.io/jq/)
+
+You will find a packaged version of those tools on most \*nix systems.
+
+#### Usage
+
+First step: query the public GitHub API to check available releases of the
+`LearningLocker` and `xapi-service` projects that have not been committed yet
+and create a version upgrade commit per release in a new branch. This can be
+achieved thanks to the `prepare` command:
+
+```
+$ bin/release prepare
+```
+
+Check that missing releases have been committed in your current branch using the
+`git log` command.
+
+If everything goes well, you can push you local branch to GitHub to open a new
+pull request:
+
+```
+$ bin/release push
+```
+
+> Note that we will not push the local branch at once, but commit per commit to
+> run the CI on each commit and ensure that the build passes for all of them.
+
+Once your pull request has been opened, reviewed and merged to `master`, you
+must tag each commit with the appropriate release tag and push this tag to
+GitHub to trigger the final image build and publication to DockerHub:
+
+```
+$ bin/release tag
+```
+
+Now you just have to wait for the CI to do its job.
+
+_nota bene_: the `bin/release` script accepts a `-t` (`--token`) option to
+perform authenticated requests against GitHub's public API. This allows you to
+bypass the [60 requests per hour rate
+limit](https://developer.github.com/v3/#rate-limiting). In this case, you will
+need to generate a new personnal access token from [GitHub's
+interface](https://github.com/settings/tokens) and use it as follows:
+
+```
+$ bin/release -t THETOKEN CMD
+```
+
 ## Using the learning locker image
 
 You have to configure your learning locker image using environment variables.
