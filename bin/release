@@ -1,0 +1,375 @@
+#!/usr/bin/env bash
+
+# Dependencies:
+#
+# - curl
+# - jq
+
+set -eo pipefail
+
+# Terminal colors
+declare -r COLOR_DEFAULT='\033[0;39m'
+declare -r COLOR_ERROR='\033[0;31m'
+declare -r COLOR_INFO='\033[0;36m'
+declare -r COLOR_RESET='\033[0m'
+declare -r COLOR_SUCCESS='\033[0;32m'
+declare -r COLOR_WARNING='\033[0;33m'
+
+# Globals
+declare GH_TOKEN=""
+declare -r GH_ORG="LearningLocker"
+declare -r GH_LRS_PROJECT="LearningLocker"
+declare -r GH_XAPI_PROJECT="xapi-service"
+# MacOSX, GNU/Linux compatibility (-t option is required for Darwin)
+declare -r WRK_DIR=$(mktemp -d 2> /dev/null || mktemp -d -t 'll-release')
+
+
+# usage: display usage with the appropriate exit code
+#
+# usage: usage [EXIT_CODE]
+#
+#   EXIT_CODE: program exit code (default: 0)
+function usage(){
+
+    exit_code="${1:-0}"
+
+    echo "Usage: bin/release [OPTIONS] COMMAND
+
+OPTIONS:
+  -h, --help
+         print this message
+  -t, --token
+         GitHub API token
+
+COMMANDS:
+  prepare: prepare services atomic updates
+  push   : atomically push updates to a remote branch
+  tag    : tag every commit corresponding to a relase & publish it
+"
+
+    exit "${exit_code}"
+}
+
+# --- Utils ---
+
+# log: log a message given a level
+#
+# usage: log LEVEL MESSAGE
+#
+#   LEVEL  : a key word in error, info, success, warning
+#   MESSAGE: message to log
+function log() {
+
+    local level="${1}"
+    local message="${2}"
+    local color
+
+    case "${level}" in
+        "error") color="${COLOR_ERROR}";;
+        "info") color="${COLOR_INFO}";;
+        "success") color="${COLOR_SUCCESS}";;
+        "warning") color="${COLOR_WARNING}";;
+        *) color="${COLOR_DEFAULT}";;
+    esac
+
+    echo -e "${color}$(printf "%-7s" "${level}" | tr "[:lower:]" "[:upper:]") ${message}${COLOR_RESET}" 1>&2
+}
+
+# --- Core ---
+
+# _update_local: sync master branch & tags
+#
+# usage: _update_local
+function _update_local() {
+
+    local release_branch
+
+    log info "☁ Fetching changes from origin"
+    git fetch origin
+    git checkout master
+    git pull origin master
+}
+
+# _bootstrap: bootstrap a new releases collection
+#
+# usage: _bootstrap
+function _bootstrap(){
+
+    release_branch="prepare-releases-${RANDOM}"
+    log info "🚉 Checking out new branch ${release_branch}"
+    git checkout -b "${release_branch}"
+}
+
+# _get_project_releases_cache_file_name: get the name of the file used as a
+# cache for a GitHub API response (JSON)
+#
+# usage: _get_project_releases_cache_file_name PROJECT
+#
+#   PROJECT: the project name
+function _get_project_releases_cache_file_name(){
+
+    local project="${1:-${GH_LRS_PROJECT}}"
+    echo "${WRK_DIR}/${project}.json"
+}
+
+# _get_project_releases_headers_file_name: get the name of the file used as a
+# cache for a GitHub API response headers
+#
+# usage: _get_project_releases_headers_file_name PROJECT
+#
+#   PROJECT: the project name
+function _get_project_releases_headers_file_name(){
+
+    local project="${1:-${GH_LRS_PROJECT}}"
+    echo "${WRK_DIR}/${project}.headers"
+}
+
+# _github_api_get_request: perform a HTTP/GET request to GitHub's API
+#
+# usage: _github_api_get_request PROJECT HEADERS CACHE ENDPOINT
+#
+#   PROJECT : the project name
+#   HEADERS : headers cache file name
+#   CACHE   : query cache file name
+#   ENDPOINT: API endpoint to query
+#
+# Nota bene: we force pagination size to 100 items for not having to deal with
+# pagination at all (it should be sufficient in most cases).
+function _github_api_get_request(){
+
+    local project="${1}"
+    local headers="${2}"
+    local cache="${3}"
+    local endpoint=${4:-releases}
+    local cmd
+
+    # Check that curl is installed and available
+    curl="$(command -v curl)"
+    if [[ -z "${curl}" ]]; then
+        log error "❌ curl is not installed (or not in your \$PATH)"
+        exit 10
+    fi
+
+    cmd="${curl}"
+
+    if [[ ! -z "${GH_TOKEN}" ]]; then
+        cmd="${cmd} -H 'Authorization: token ${GH_TOKEN}'"
+    fi
+    cmd="${cmd} -D ${headers}"
+    cmd="${cmd} -s 'https://api.github.com/repos/${GH_ORG}/${project}/${endpoint}?per_page=100'"
+    cmd="${cmd} > ${cache}"
+
+    log debug "☁ Running: ${cmd}"
+    bash -c "${cmd}"
+}
+
+# _fetch_project_releases: get releases for a given project by querying GitHub's
+# API
+#
+# usage: _fetch_project_releases PROJECT
+#
+#   PROJECT : the project name
+function _fetch_project_releases(){
+
+    local project="${1:-${GH_LRS_PROJECT}}"
+    local headers
+    local cache
+
+    cache=$(_get_project_releases_cache_file_name "${project}")
+    headers=$(_get_project_releases_headers_file_name "${project}")
+
+    log info "☁ Fetching releases for: ${GH_ORG}/${project}"
+
+    _github_api_get_request "${project}" "${headers}" "${cache}"
+
+    log debug "💾 Cached request in: ${cache} & ${headers}"
+}
+
+# _get_project_new_releases: compare local and origin releases to get only
+# missing local releases
+#
+# usage: _get_project_new_releases PROJECT
+#
+#   PROJECT : the project name
+function _get_project_new_releases(){
+
+    local project="${1:-${GH_LRS_PROJECT}}"
+    local cache
+
+    cache=$(_get_project_releases_cache_file_name "${project}")
+
+    if [[ ! -f "${cache}" ]]; then
+        _fetch_project_releases "${project}"
+    fi
+
+    # Get latest local release index compared to the list of offical releases
+    latest_release=$(git tag | grep -i "${project}" | sort | tail -n 1 | sed "s/.*-\\(v.*\\)/\\1/")
+    idx=$(jq "map(.tag_name == \"${latest_release}\") | index(true)" "${cache}")
+    log debug "🔍 Latest release: ${latest_release} (index: ${idx})"
+
+    # List releases
+    releases=$(jq -r ".[0:${idx}] | reverse | .[] | .tag_name" "${cache}")
+    log info "📄 Missing releases to process for project ${project}:\\n${releases}"
+
+    echo -e "${releases}"
+}
+
+# _get_project_git_scope: get a git scope given a project name
+#
+# usage: _get_project_git_scope PROJECT
+#
+#   PROJECT : the project name
+function _get_project_git_scope(){
+
+    local project="${1}"
+
+    echo "${project}" | tr "[:upper:]" "[:lower:]"
+}
+
+# _commits: cook one commit per missing local release
+#
+# usage: _commit_project_new_releases PROJECT
+#
+#   PROJECT : the project name
+function _commit_project_new_releases(){
+
+    local project="${1:-${GH_LRS_PROJECT}}"
+    local project_version
+    local project_git_scope
+    local cache
+    local release_file=".circleci/releases.sh"
+
+    project_version=$(echo "${project}_VERSION" | sed "s/-//g" | tr "[:lower:]" "[:upper:]")
+    project_git_scope=$(_get_project_git_scope "${project}")
+    cache=$(_get_project_releases_cache_file_name "${project}")
+
+    for release in $(_get_project_new_releases "${project}"); do
+
+        log info "🔖 Commiting release: ${project}-${release}"
+
+        # Release url to add to the commit message
+        html_url=$(jq -r ".[] | select(.tag_name == \"${release}\") | .html_url" "${cache}")
+        sed -i "s/\\(export ${project_version}=\\).*/\\1\"${release}\"/" "${release_file}"
+        git add "${release_file}"
+        echo -e "🔖(${project_git_scope}) bump version to ${release}\\n\\n${html_url}" | git commit -F -
+    done
+}
+
+# --- Commands ---
+
+# prepare: prepare projects version updates in a temporary branch (one commit
+# per upgrade)
+#
+# Usage: prepare
+function prepare(){
+
+    local project
+
+    # Update master branch and tags
+    _update_local
+
+    # Check out a new branch to work on
+    _bootstrap
+
+    # Make changes for both projects
+    for project in "${GH_LRS_PROJECT}" "${GH_XAPI_PROJECT}"; do
+        _commit_project_new_releases "${project}"
+    done
+}
+
+# push: push every release commit one-by-one to trigger the CI for each commit
+#
+# Usage: push
+function push(){
+
+    local branch
+    local commits
+
+    branch=$(git rev-parse --abbrev-ref HEAD)
+    # Nota bene: we use tac to reverse the commit list so that we start pushing
+    # the oldest one. As tac may not be installed in BSD-like systems, we
+    # fallback to "tail -r".
+    commits=$(\
+        git log --oneline "master..${branch}" | \
+        sed "s/\([[:alnum:]]*\) .*/\1/" |
+        tac 2> /dev/null || tail -r)
+
+    # Create remote branch starting from master
+    log info "☁ Creating remote branch origin/${branch}"
+    git push origin "master:refs/heads/${branch}"
+
+    for commit in ${commits}; do
+        log info "☁ Pushing commit ${commit} to origin/${branch}"
+        git push origin "${commit}:${branch}"
+    done
+}
+
+# tag: tag missing releases in the master branch
+#
+# usage: tag
+function tag(){
+
+    local commit
+    local project_git_scope
+    local tag
+
+    # Update local master branch to tag
+    _update_local
+
+    for project in "${GH_LRS_PROJECT}" "${GH_XAPI_PROJECT}"; do
+        project_git_scope=$(_get_project_git_scope "${project}")
+
+        for release in $(_get_project_new_releases "${project}"); do
+            commit=$(\
+                git log --oneline | \
+                grep -e "($(_get_project_git_scope ${project})) bump version to ${release}$" | \
+                sed "s/\([[:alnum:]]*\) .*/\1/")
+
+            if [[ -z "${commit}" ]]; then
+                log warning "❌ Cannot find a commit for ${project}/${release} release"
+                continue
+            fi
+
+            tag="${project_git_scope}-${release}"
+
+            log info "🔖 Tagging commit ${commit} as ${tag}"
+            git tag "${tag}" "${commit}"
+            git push origin "${tag}"
+        done
+    done
+}
+
+# --- Main ---
+
+OPTS=$(getopt -o "t:h" --long "token:,help" -n "release" -- "$@")
+eval set -- "$OPTS"
+
+# Parse options to the `release` command
+while true; do
+    case "${1}" in
+        -h|--help)
+            usage 0;;
+        -t|--token)
+            GH_TOKEN="${2}"
+            shift 2;;
+        --)
+            shift; break;;
+        *)
+            echo "Invalid option, see usage (-h)." 1>&2
+            exit 1;;
+    esac
+done
+
+# Print usage if no COMMAND has been passed
+if [[ -z "${1}" ]]; then
+    usage 1
+fi
+
+# Default action is usage
+action="${1:-usage}"
+
+# Remove the current action from command line arguments
+shift
+
+# Perform action
+"${action}" "$@"
