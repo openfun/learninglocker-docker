@@ -77,7 +77,7 @@ jobs:
             source ./.circleci/releases.sh
             docker build \
               -t fundocker/xapi-service:${CIRCLE_SHA1} \
-              --build-arg VERSION="${XAPI_VERSION}" \
+              --build-arg VERSION="${XAPISERVICE_VERSION}" \
               xapi/
 
       - run:
@@ -186,7 +186,7 @@ jobs:
           command: |
             source ./.circleci/releases.sh
             docker tag fundocker/xapi-service:${CIRCLE_SHA1} fundocker/xapi-service:latest
-            docker tag fundocker/xapi-service:${CIRCLE_SHA1} fundocker/xapi-service:${XAPI_VERSION}
+            docker tag fundocker/xapi-service:${CIRCLE_SHA1} fundocker/xapi-service:${XAPISERVICE_VERSION}
             docker images fundocker/xapi-service
 
       - run:
@@ -194,7 +194,7 @@ jobs:
           command: |
             source ./.circleci/releases.sh
             docker push fundocker/xapi-service:latest
-            docker push fundocker/xapi-service:${XAPI_VERSION}
+            docker push fundocker/xapi-service:${XAPISERVICE_VERSION}
 
 workflows:
   version: 2
