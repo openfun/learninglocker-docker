@@ -203,7 +203,7 @@ function _get_project_new_releases(){
     fi
 
     # Get latest local release index compared to the list of offical releases
-    latest_release=$(git tag | grep -i "${project}" | sort | tail -n 1 | sed "s/.*-\\(v.*\\)/\\1/")
+    latest_release=$(git tag | grep -i "${project}" | sort -V | tail -n 1 | sed "s/.*-\\(v.*\\)/\\1/")
     idx=$(jq "map(.tag_name == \"${latest_release}\") | index(true)" "${cache}")
     log debug "🔍 Latest release: ${latest_release} (index: ${idx})"
 
