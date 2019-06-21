@@ -320,10 +320,14 @@ function tag(){
         project_git_scope=$(_get_project_git_scope "${project}")
 
         for release in $(_get_project_new_releases "${project}"); do
+            # Don't exit if the grep instruction fails for the targeted commit (pattern not found)
+            # If a release has not been committed yet, we just want to ignore it.
+            set +e
             commit=$(\
                 git log --oneline | \
                 grep -e "($(_get_project_git_scope ${project})) bump version to ${release}$" | \
                 sed "s/\([[:alnum:]]*\) .*/\1/")
+            set -e
 
             if [[ -z "${commit}" ]]; then
                 log warning "❌ Cannot find a commit for ${project}/${release} release"
