@@ -1,5 +1,5 @@
 # Learning Locker Dockerfile
-FROM node:8-jessie-slim
+FROM node:10-jessie-slim
 
 # Change Learning Locker version to build, by providing the LL_VERSION build argument to
 # to your build command
@@ -14,6 +14,13 @@ ARG LL_VERSION
 RUN mkdir /app \
     && chown node. /app
 
+# Python, make and g++ are required in order to run node-gyp
+# in the `yarn install` step.
+# Curl is required to download learninglocker tarball.
+RUN apt-get update \
+    && apt-get install -y curl python make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 USER node
 
 # Download release and extract it in /app
@@ -26,7 +33,7 @@ RUN cd /tmp && curl --compressed -L -o "learninglocker-${LL_VERSION}.tar.gz" "ht
 # The .env file is only created to avoid application warning message.
 RUN cd /app \
     && touch .env \
-    && yarn install \
+    && npm_config_build_from_source=true yarn install --ignore-engines \
     && yarn build-all
 
 WORKDIR /app
