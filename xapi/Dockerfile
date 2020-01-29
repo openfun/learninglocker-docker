@@ -1,7 +1,12 @@
 # xapi-service Dockerfile
-FROM node:8-jessie-slim as Builder
+FROM node:10-jessie-slim as Builder
 
 ARG VERSION
+
+# Curl is required to download xapi-service tarball.
+RUN apt-get update \
+    && apt-get install -y curl \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir /app
 
@@ -13,11 +18,11 @@ RUN cd /tmp && curl --compressed -L -o "xapi-service-${VERSION}.tar.gz" "https:/
 # Install xapi-service
 RUN cd /app \
     && rm package-lock.json \
-    && yarn install \
+    && yarn install --ignore-engines \
     && yarn build
 
 ## New stage to create the release
-FROM node:8-jessie-slim
+FROM node:10-jessie-slim
 
 RUN mkdir /app \
     && chown -R node. /app
@@ -28,7 +33,7 @@ WORKDIR /app
 
 COPY --chown=node:node --from=Builder /app/package.json .
 COPY --chown=node:node --from=Builder /app/yarn.lock .
-RUN yarn install --production
+RUN yarn install --production --ignore-engines
 COPY --chown=node:node --from=Builder /app/dist/ dist/
 RUN mkdir -p /app/storage
 
