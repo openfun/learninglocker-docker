@@ -17,7 +17,6 @@ RUN cd /tmp && curl --compressed -L -o "xapi-service-${VERSION}.tar.gz" "https:/
 
 # Install xapi-service
 RUN cd /app \
-    && rm package-lock.json \
     && yarn install --ignore-engines \
     && yarn build
 
