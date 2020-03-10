@@ -1,4 +1,4 @@
 #!/bin/sh
 
-export LEARNINGLOCKER_VERSION="v6.0.7"
+export LEARNINGLOCKER_VERSION="v6.0.8"
 export XAPISERVICE_VERSION="v3.2.0"
