@@ -36,4 +36,8 @@ RUN yarn install --production --ignore-engines
 COPY --chown=node:node --from=Builder /app/dist/ dist/
 RUN mkdir -p /app/storage
 
-CMD ["yarn", "start"]
+# Install PM2 process manager
+ENV PATH="/home/node/.yarn/bin:$PATH"
+RUN yarn global add pm2
+
+CMD ["pm2-runtime", "dist/server.js"]

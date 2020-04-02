@@ -36,4 +36,8 @@ RUN cd /app \
     && npm_config_build_from_source=true yarn install --ignore-engines \
     && yarn build-all
 
+# Install PM2 node process manager
+ENV PATH="/home/node/.yarn/bin:$PATH"
+RUN yarn global add pm2
+
 WORKDIR /app
