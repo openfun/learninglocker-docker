@@ -2,7 +2,7 @@ version: "3"
 
 services:
   mongodb:
-    image: mongo:3.2
+    image: mongo:4.0
     # We use WiredTiger in all environments. In development environments we use small files
     # to conserve disk space, and disable the journal for a minor performance gain.
     # See https://docs.mongodb.com/v3.0/reference/program/mongod/#options for complete details.
@@ -17,7 +17,7 @@ services:
     image: redis:4-alpine
 
   xapi:
-    image: fundocker/xapi-service:v2.2.15
+    image: fundocker/xapi-service:v3.6.0
     environment:
       - MONGO_URL=mongodb://mongodb:27017/learninglocker_v2
       - REDIS_URL=redis://redis:6379/0
@@ -29,40 +29,40 @@ services:
       - worker
 
   api:
-    image: fundocker/learninglocker:v2.6.2
+    image: fundocker/learninglocker:v6.0.9
     env_file:
       - env.d/learninglocker
     expose:
       - "8080"
     volumes:
       - "./storage:/app/storage"
-    command: "node api/dist/server"
+    command: "pm2-runtime api/dist/server"
     depends_on:
       - mongodb
       - redis
       - mailcatcher
 
   ui:
-    image: fundocker/learninglocker:v2.6.2
+    image: fundocker/learninglocker:v6.0.9
     env_file:
       - env.d/learninglocker
     volumes:
       - "./storage:/app/storage"
     expose:
       - "3000"
-    command: "node ui/dist/server"
+    command: "pm2-runtime ui/dist/server"
     depends_on:
       - mongodb
       - redis
       - api
 
   worker:
-    image: fundocker/learninglocker:v2.6.2
+    image: fundocker/learninglocker:v6.0.9
     env_file:
       - env.d/learninglocker
     volumes:
       - "./storage:/app/storage"
-    command: "node worker/dist/server"
+    command: "pm2-runtime worker/dist/server"
     depends_on:
       - mongodb
       - redis
