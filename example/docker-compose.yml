@@ -17,7 +17,7 @@ services:
     image: redis:4-alpine
 
   xapi:
-    image: fundocker/xapi-service:v3.6.0
+    image: fundocker/xapi-service:v3.6.1
     environment:
       - MONGO_URL=mongodb://mongodb:27017/learninglocker_v2
       - REDIS_URL=redis://redis:6379/0
@@ -29,7 +29,7 @@ services:
       - worker
 
   api:
-    image: fundocker/learninglocker:v6.0.9
+    image: fundocker/learninglocker:v6.2.0
     env_file:
       - env.d/learninglocker
     expose:
@@ -43,7 +43,7 @@ services:
       - mailcatcher
 
   ui:
-    image: fundocker/learninglocker:v6.0.9
+    image: fundocker/learninglocker:v6.2.0
     env_file:
       - env.d/learninglocker
     volumes:
@@ -57,7 +57,7 @@ services:
       - api
 
   worker:
-    image: fundocker/learninglocker:v6.0.9
+    image: fundocker/learninglocker:v6.2.0
     env_file:
       - env.d/learninglocker
     volumes:
